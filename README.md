@@ -5,8 +5,8 @@
 ![Playwright](https://img.shields.io/badge/Playwright-Testing-2EAD33?logo=playwright)
 ![SQLite](https://img.shields.io/badge/SQLite-DB-003B57?logo=sqlite)
 ![License](https://img.shields.io/badge/License-MIT-green)
-[![CI](https://github.com/USER_OR_ORG/skkni-http-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/USER_OR_ORG/skkni-http-scraper/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/USER_OR_ORG/skkni-http-scraper/branch/main/graph/badge.svg)](https://codecov.io/gh/USER_OR_ORG/skkni-http-scraper)
+[![CI](https://github.com/andhit-r/skkni-http-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/andhit-r/skkni-http-scraper/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/andhit-t/skkni-http-scraper/branch/main/graph/badge.svg)](https://codecov.io/gh/andhit-r/skkni-http-scraper)
 
 
 > **SKKNI HTTP Scraper** adalah layanan HTTP berbasis [FastAPI](https://fastapi.tiangolo.com/) untuk mengambil data **dokumen** dan **unit kompetensi** dari portal resmi SKKNI (Kemnaker), lengkap dengan caching lokal menggunakan SQLite.
