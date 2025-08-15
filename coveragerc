@@ -1,0 +1,16 @@
+[run]
+branch = True
+source = 
+    app
+omit = 
+    tests/*
+    */.venv/*
+    */site-packages/*
+    app/main.py
+
+[report]
+show_missing = True
+skip_covered = True
+
+[xml]
+output = coverage.xml
