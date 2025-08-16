@@ -1,325 +1,270 @@
-from typing import List, Dict, Iterable, Tuple, Optional
-from sqlalchemy import select, or_
-from sqlalchemy.orm import Session
+from __future__ import annotations
+
 from datetime import datetime, timedelta
+from typing import Iterable, List, Optional, Tuple
 
-from app.db.models import (
-    Document, Unit,
-    Sector, Field, SubField,
-    DocumentTaxonomy, UnitTaxonomy
-)
+from sqlalchemy import func, select, or_, and_
+from sqlalchemy.orm import Session
 
+from app.db import models
+
+# TTL cache hanya dipakai untuk logika lama (kalau masih ada)
 CACHE_TTL_DAYS = 30
 
-# ------------- Helpers -------------
 
-def _uuid_from_unduh(unduh_url: str) -> str:
-    import re
-    m = re.search(r"/documents/([^/]+)/", unduh_url or "")
-    return (m.group(1) if m else "").lower()
-
-def needs_refresh(ts: datetime) -> bool:
+def is_expired(ts: Optional[datetime]) -> bool:
     return (not ts) or ((datetime.utcnow() - ts) > timedelta(days=CACHE_TTL_DAYS))
 
-def _norm_name(x: str | None) -> str:
-    return (x or "").strip()
 
-# ------------- Taxonomy upsert -------------
-
-def get_or_create_sector(db: Session, name: str | None, code: str | None = None) -> Sector | None:
-    name = _norm_name(name)
-    if not name:
+def _coerce_dt(val) -> Optional[datetime]:
+    """
+    Terima datetime/str/None → kembalikan datetime (atau None).
+    - String yang didukung:
+      * ISO 8601 (datetime.fromisoformat)
+      * 'YYYY-MM-DD HH:MM:SS'
+    """
+    if val is None:
         return None
-    q = select(Sector).where(Sector.name == name)
-    obj = db.execute(q).scalar_one_or_none()
-    if obj:
-        return obj
-    obj = Sector(name=name, code=code or None)
-    db.add(obj)
-    db.flush()
-    return obj
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, str):
+        # coba ISO 8601 dulu
+        try:
+            return datetime.fromisoformat(val)
+        except Exception:
+            pass
+        # coba format 'YYYY-MM-DD HH:MM:SS'
+        try:
+            return datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            pass
+    # fallback: None (biar gak meledak)
+    return None
 
-def get_or_create_field(db: Session, sector: Sector | None, name: str | None, code: str | None = None) -> Field | None:
-    name = _norm_name(name)
-    if not sector or not name:
-        return None
-    q = select(Field).where(Field.sector_id == sector.id, Field.name == name)
-    obj = db.execute(q).scalar_one_or_none()
-    if obj:
-        return obj
-    obj = Field(sector_id=sector.id, name=name, code=code or None)
-    db.add(obj)
-    db.flush()
-    return obj
 
-def get_or_create_subfield(db: Session, field: Field | None, name: str | None, code: str | None = None) -> SubField | None:
-    name = _norm_name(name)
-    if not field or not name:
-        return None
-    q = select(SubField).where(SubField.field_id == field.id, SubField.name == name)
-    obj = db.execute(q).scalar_one_or_none()
-    if obj:
-        return obj
-    obj = SubField(field_id=field.id, name=name, code=code or None)
-    db.add(obj)
-    db.flush()
-    return obj
+# --------------------------
+# Documents
+# --------------------------
 
-def _link_document_taxonomy(db: Session, doc_uuid: str, sektor: str | None, bidang: str | None, sub_bidang: str | None):
-    sector_obj = get_or_create_sector(db, sektor)
-    field_obj = get_or_create_field(db, sector_obj, bidang) if bidang else None
-    subfield_obj = get_or_create_subfield(db, field_obj, sub_bidang) if sub_bidang else None
-
-    tx = db.get(DocumentTaxonomy, doc_uuid)
-    if tx:
-        tx.sector_id = sector_obj.id if sector_obj else None
-        tx.field_id = field_obj.id if field_obj else None
-        tx.subfield_id = subfield_obj.id if subfield_obj else None
-    else:
-        tx = DocumentTaxonomy(
-            document_uuid=doc_uuid,
-            sector_id=sector_obj.id if sector_obj else None,
-            field_id=field_obj.id if field_obj else None,
-            subfield_id=subfield_obj.id if subfield_obj else None,
-        )
-        db.add(tx)
-
-def _link_unit_taxonomy(db: Session, unit_id: int, sektor: str | None, bidang: str | None, sub_bidang: str | None):
-    sector_obj = get_or_create_sector(db, sektor)
-    field_obj = get_or_create_field(db, sector_obj, bidang) if bidang else None
-    subfield_obj = get_or_create_subfield(db, field_obj, sub_bidang) if sub_bidang else None
-
-    tx = db.get(UnitTaxonomy, unit_id)
-    if tx:
-        tx.sector_id = sector_obj.id if sector_obj else None
-        tx.field_id = field_obj.id if field_obj else None
-        tx.subfield_id = subfield_obj.id if subfield_obj else None
-    else:
-        tx = UnitTaxonomy(
-            unit_id=unit_id,
-            sector_id=sector_obj.id if sector_obj else None,
-            field_id=field_obj.id if field_obj else None,
-            subfield_id=subfield_obj.id if subfield_obj else None,
-        )
-        db.add(tx)
-
-# ------------- Upserts -------------
-
-def upsert_documents(db: Session, docs: Iterable[Dict]) -> None:
+def upsert_documents(db: Session, docs: Iterable[dict]) -> None:
+    """
+    Upsert daftar dokumen ke tabel documents.
+    Field wajib: uuid, judul_skkni, nomor_skkni, sektor, bidang, tahun, unduh_url, listing_url
+    sub_bidang boleh None. updated_at akan di-coerce ke datetime jika string.
+    """
     for d in docs:
-        uuid = _uuid_from_unduh(d.get("unduh_url", "")) or d.get("uuid") or ""
-        if not uuid:
-            continue
-        obj = db.get(Document, uuid)
-        payload = {
-            "uuid": uuid,
-            "judul_skkni": d.get("judul_skkni", ""),
-            "nomor_skkni": d.get("nomor_skkni", "") or "",
-            "sektor": d.get("sektor", "") or "",
-            "bidang": d.get("bidang", "") or "",
-            "sub_bidang": d.get("sub_bidang", "") or "",
-            "tahun": d.get("tahun", "") or "",
-            "nomor_kepmen": d.get("nomor_kepmen", "") or "",
-            "unduh_url": d.get("unduh_url", "") or "",
-            "listing_url": d.get("listing_url", "") or "",
-            "raw_json": d.get("__raw_json__", "") or "",
-            "updated_at": datetime.utcnow(),
-        }
-        if obj:
-            for k, v in payload.items():
-                setattr(obj, k, v)
-        else:
-            obj = Document(**payload)
+        uuid = d["uuid"]
+        obj: models.Document | None = db.get(models.Document, uuid)
+        upd_at = _coerce_dt(d.get("updated_at"))
+
+        if obj is None:
+            obj = models.Document(
+                uuid=uuid,
+                judul_skkni=d.get("judul_skkni"),
+                nomor_skkni=d.get("nomor_skkni"),
+                sektor=d.get("sektor"),
+                bidang=d.get("bidang"),
+                sub_bidang=d.get("sub_bidang"),  # boleh None
+                tahun=d.get("tahun"),
+                nomor_kepmen=d.get("nomor_kepmen"),
+                unduh_url=d.get("unduh_url"),
+                listing_url=d.get("listing_url"),
+                updated_at=upd_at,
+            )
             db.add(obj)
-            db.flush()
-
-        _link_document_taxonomy(db, uuid, payload["sektor"], payload["bidang"], payload["sub_bidang"])
-
-def upsert_units(db: Session, units: Iterable[Dict]) -> None:
-    for u in units:
-        uuid = _uuid_from_unduh(u.get("unduh_url", "")) or u.get("doc_uuid") or ""
-        kode = (u.get("kode_unit") or u.get("kode") or "").strip()
-        if not uuid or not kode:
-            continue
-
-        q = select(Unit).where(Unit.doc_uuid == uuid, Unit.kode_unit == kode)
-        obj = db.execute(q).scalar_one_or_none()
-
-        payload = {
-            "doc_uuid": uuid,
-            "kode_unit": kode,
-            "judul_unit": u.get("judul_unit", "") or "",
-            "nomor_skkni": u.get("nomor_skkni", "") or "",
-            "sektor": u.get("sektor", "") or "",
-            "bidang": u.get("bidang", "") or "",
-            "sub_bidang": u.get("sub_bidang", "") or "",
-            "tahun": u.get("tahun", "") or "",
-            "nomor_kepmen": u.get("nomor_kepmen", "") or "",
-            "unduh_url": u.get("unduh_url", "") or "",
-            "listing_url": u.get("listing_url", "") or "",
-            "updated_at": datetime.utcnow(),
-        }
-
-        if obj:
-            for k, v in payload.items():
-                setattr(obj, k, v)
-            unit_id = obj.id
         else:
-            obj = Unit(**payload)
-            db.add(obj)
-            db.flush()
-            unit_id = obj.id
+            obj.judul_skkni = d.get("judul_skkni")
+            obj.nomor_skkni = d.get("nomor_skkni")
+            obj.sektor = d.get("sektor")
+            obj.bidang = d.get("bidang")
+            obj.sub_bidang = d.get("sub_bidang")
+            obj.tahun = d.get("tahun")
+            obj.nomor_kepmen = d.get("nomor_kepmen")
+            obj.unduh_url = d.get("unduh_url")
+            obj.listing_url = d.get("listing_url")
+            obj.updated_at = upd_at
+    db.commit()
 
-        _link_unit_taxonomy(db, unit_id, payload["sektor"], payload["bidang"], payload["sub_bidang"])
 
-# ------------- Readers (cache-first with taxonomy names) -------------
-
-def get_documents_cached(db: Session, limit: int, offset: int = 0) -> List[Document]:
-    q = select(Document).order_by(Document.updated_at.desc()).offset(offset).limit(limit)
-    return list(db.execute(q).scalars())
-
-def get_units_cached(db: Session, limit: int, offset: int = 0) -> List[Unit]:
-    q = select(Unit).order_by(Unit.updated_at.desc()).offset(offset).limit(limit)
-    return list(db.execute(q).scalars())
-
-def get_documents_cached_with_taxo(db: Session, limit: int, offset: int = 0):
-    docs = get_documents_cached(db, limit=limit, offset=offset)
-    out = []
-    for d in docs:
-        tx = db.get(DocumentTaxonomy, d.uuid)
-        if tx:
-            sektor = db.get(Sector, tx.sector_id).name if tx.sector_id else None
-            bidang = db.get(Field, tx.field_id).name if tx.field_id else None
-            subf  = db.get(SubField, tx.subfield_id).name if tx.subfield_id else None
-        else:
-            sektor = bidang = subf = None
-        out.append((d, sektor or (d.sektor or None), bidang or (d.bidang or None), subf or (d.sub_bidang or None)))
-    return out
-
-def get_units_cached_with_taxo(db: Session, limit: int, offset: int = 0):
-    units = get_units_cached(db, limit=limit, offset=offset)
-    out = []
-    for u in units:
-        tx = db.get(UnitTaxonomy, u.id)
-        if tx:
-            sektor = db.get(Sector, tx.sector_id).name if tx.sector_id else None
-            bidang = db.get(Field, tx.field_id).name if tx.field_id else None
-            subf  = db.get(SubField, tx.subfield_id).name if tx.subfield_id else None
-        else:
-            sektor = bidang = subf = None
-        out.append((u, sektor or (u.sektor or None), bidang or (u.bidang or None), subf or (u.sub_bidang or None)))
-    return out
-
-# ---------- Browsing taxonomy ----------
-
-def list_sectors(db: Session, q: str | None = None, limit: int = 100, offset: int = 0) -> List[Sector]:
-    query = select(Sector).order_by(Sector.name).offset(offset).limit(limit)
+def get_documents(
+    db: Session,
+    limit: int = 20,
+    q: Optional[str] = None,
+    sektor: Optional[str] = None,
+    bidang: Optional[str] = None,
+    tahun: Optional[str] = None,
+) -> Tuple[int, List[dict]]:
+    """
+    Ambil dokumen dari DB dengan optional filter.
+    """
+    stmt = select(models.Document)
     if q:
-        query = select(Sector).where(Sector.name.ilike(f"%{q}%")).order_by(Sector.name).offset(offset).limit(limit)
-    return list(db.execute(query).scalars())
-
-def list_fields(db: Session, sector_id: int, limit: int = 200, offset: int = 0) -> List[Field]:
-    query = select(Field).where(Field.sector_id == sector_id).order_by(Field.name).offset(offset).limit(limit)
-    return list(db.execute(query).scalars())
-
-def list_subfields(db: Session, field_id: int, limit: int = 200, offset: int = 0) -> List[SubField]:
-    query = select(SubField).where(SubField.field_id == field_id).order_by(SubField.name).offset(offset).limit(limit)
-    return list(db.execute(query).scalars())
-
-# ---------- SEARCH with taxonomy filters ----------
-
-def search_documents_by_taxo(
-    db: Session,
-    sector_id: Optional[int] = None,
-    field_id: Optional[int] = None,
-    subfield_id: Optional[int] = None,
-    qtext: Optional[str] = None,
-    limit: int = 20,
-    offset: int = 0,
-):
-    """
-    Cari dokumen berdasarkan taxonomy id dan/atau teks (judul / nomor).
-    Return list of (Document, sektor_name, bidang_name, sub_bidang_name).
-    """
-    stmt = (
-        select(
-            Document,
-            Sector.name,
-            Field.name,
-            SubField.name,
-        )
-        .select_from(Document)
-        .outerjoin(DocumentTaxonomy, DocumentTaxonomy.document_uuid == Document.uuid)
-        .outerjoin(Sector, Sector.id == DocumentTaxonomy.sector_id)
-        .outerjoin(Field, Field.id == DocumentTaxonomy.field_id)
-        .outerjoin(SubField, SubField.id == DocumentTaxonomy.subfield_id)
-    )
-
-    if sector_id:
-        stmt = stmt.where(DocumentTaxonomy.sector_id == sector_id)
-    if field_id:
-        stmt = stmt.where(DocumentTaxonomy.field_id == field_id)
-    if subfield_id:
-        stmt = stmt.where(DocumentTaxonomy.subfield_id == subfield_id)
-    if qtext:
-        like = f"%{qtext}%"
-        stmt = stmt.where(or_(Document.judul_skkni.ilike(like), Document.nomor_skkni.ilike(like)))
-
-    stmt = stmt.order_by(Document.updated_at.desc()).offset(offset).limit(limit)
-
-    rows = db.execute(stmt).all()
-    out = []
-    for d, sektor, bidang, subf in rows:
-        out.append((d, sektor or (d.sektor or None), bidang or (d.bidang or None), subf or (d.sub_bidang or None)))
-    return out
-
-def search_units_by_taxo(
-    db: Session,
-    sector_id: Optional[int] = None,
-    field_id: Optional[int] = None,
-    subfield_id: Optional[int] = None,
-    qtext: Optional[str] = None,
-    limit: int = 20,
-    offset: int = 0,
-):
-    """
-    Cari unit berdasarkan taxonomy id dan/atau teks (judul_unit / kode_unit / nomor_skkni).
-    Return list of (Unit, sektor_name, bidang_name, sub_bidang_name).
-    """
-    stmt = (
-        select(
-            Unit,
-            Sector.name,
-            Field.name,
-            SubField.name,
-        )
-        .select_from(Unit)
-        .outerjoin(UnitTaxonomy, UnitTaxonomy.unit_id == Unit.id)
-        .outerjoin(Sector, Sector.id == UnitTaxonomy.sector_id)
-        .outerjoin(Field, Field.id == UnitTaxonomy.field_id)
-        .outerjoin(SubField, SubField.id == UnitTaxonomy.subfield_id)
-    )
-
-    if sector_id:
-        stmt = stmt.where(UnitTaxonomy.sector_id == sector_id)
-    if field_id:
-        stmt = stmt.where(UnitTaxonomy.field_id == field_id)
-    if subfield_id:
-        stmt = stmt.where(UnitTaxonomy.subfield_id == subfield_id)
-    if qtext:
-        like = f"%{qtext}%"
+        like = f"%{q}%"
         stmt = stmt.where(
             or_(
-                Unit.judul_unit.ilike(like),
-                Unit.kode_unit.ilike(like),
-                Unit.nomor_skkni.ilike(like),
+                models.Document.judul_skkni.ilike(like),
+                models.Document.nomor_skkni.ilike(like),
+                models.Document.sektor.ilike(like),
+                models.Document.bidang.ilike(like),
+                models.Document.sub_bidang.ilike(like),
             )
         )
+    if sektor:
+        stmt = stmt.where(models.Document.sektor == sektor)
+    if bidang:
+        stmt = stmt.where(models.Document.bidang == bidang)
+    if tahun:
+        stmt = stmt.where(models.Document.tahun == tahun)
 
-    stmt = stmt.order_by(Unit.updated_at.desc()).offset(offset).limit(limit)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    rows = db.execute(stmt.order_by(models.Document.updated_at.desc().nullslast()).limit(limit)).scalars().all()
 
-    rows = db.execute(stmt).all()
-    out = []
-    for u, sektor, bidang, subf in rows:
-        out.append((u, sektor or (u.sektor or None), bidang or (u.bidang or None), subf or (u.sub_bidang or None)))
-    return out
+    items = []
+    for r in rows:
+        items.append(
+            {
+                "uuid": r.uuid,
+                "judul_skkni": r.judul_skkni,
+                "nomor_skkni": r.nomor_skkni,
+                "sektor": r.sektor,
+                "bidang": r.bidang,
+                "sub_bidang": r.sub_bidang,
+                "tahun": r.tahun,
+                "nomor_kepmen": r.nomor_kepmen,
+                "unduh_url": r.unduh_url,
+                "listing_url": r.listing_url,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            }
+        )
+    return total or 0, items
+
+
+# --------------------------
+# Units
+# --------------------------
+
+def upsert_units(db: Session, units: Iterable[dict]) -> None:
+    """
+    Upsert daftar unit ke tabel units.
+    Field wajib: doc_uuid, kode_unit, judul_unit
+    Field tambahan (opsional): sektor, bidang, sub_bidang, nomor_skkni, tahun, updated_at
+    """
+    for u in units:
+        key = (u["doc_uuid"], u["kode_unit"])
+        obj: models.Unit | None = (
+            db.execute(
+                select(models.Unit).where(
+                    and_(models.Unit.doc_uuid == key[0], models.Unit.kode_unit == key[1])
+                )
+            )
+            .scalars()
+            .first()
+        )
+        upd_at = _coerce_dt(u.get("updated_at"))
+
+        if obj is None:
+            obj = models.Unit(
+                doc_uuid=u["doc_uuid"],
+                kode_unit=u["kode_unit"],
+                judul_unit=u.get("judul_unit"),
+                sektor=u.get("sektor"),
+                bidang=u.get("bidang"),
+                sub_bidang=u.get("sub_bidang"),
+                nomor_skkni=u.get("nomor_skkni"),
+                tahun=u.get("tahun"),
+                updated_at=upd_at,
+            )
+            db.add(obj)
+        else:
+            obj.judul_unit = u.get("judul_unit")
+            obj.sektor = u.get("sektor")
+            obj.bidang = u.get("bidang")
+            obj.sub_bidang = u.get("sub_bidang")
+            obj.nomor_skkni = u.get("nomor_skkni")
+            obj.tahun = u.get("tahun")
+            obj.updated_at = upd_at
+    db.commit()
+
+
+def get_units(
+    db: Session,
+    limit: int = 50,
+    q: Optional[str] = None,
+    sektor: Optional[str] = None,
+    bidang: Optional[str] = None,
+    tahun: Optional[str] = None,
+    doc_uuid: Optional[str] = None,
+) -> Tuple[int, List[dict]]:
+    """
+    Ambil units dari DB. Jika tanpa filter sekalipun, harus tetap return data (dibatasi 'limit').
+    """
+    stmt = select(models.Unit)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(
+            or_(
+                models.Unit.judul_unit.ilike(like),
+                models.Unit.kode_unit.ilike(like),
+            )
+        )
+    if sektor:
+        stmt = stmt.where(models.Unit.sektor == sektor)
+    if bidang:
+        stmt = stmt.where(models.Unit.bidang == bidang)
+    if tahun:
+        stmt = stmt.where(models.Unit.tahun == tahun)
+    if doc_uuid:
+        stmt = stmt.where(models.Unit.doc_uuid == doc_uuid)
+
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    rows = db.execute(stmt.order_by(models.Unit.updated_at.desc().nullslast()).limit(limit)).scalars().all()
+
+    items = []
+    for r in rows:
+        items.append(
+            {
+                "doc_uuid": r.doc_uuid,
+                "kode_unit": r.kode_unit,
+                "judul_unit": r.judul_unit,
+                "sektor": r.sektor,
+                "bidang": r.bidang,
+                "sub_bidang": r.sub_bidang,
+                "nomor_skkni": r.nomor_skkni,
+                "tahun": r.tahun,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            }
+        )
+    return total or 0, items
+
+
+# --------------------------
+# Taxonomy (distinct)
+# --------------------------
+
+def get_distinct_sectors(db: Session) -> List[Tuple[str, int]]:
+    stmt = (
+        select(models.Document.sektor, func.count(models.Document.uuid))
+        .group_by(models.Document.sektor)
+        .order_by(func.count(models.Document.uuid).desc())
+    )
+    return [(name, cnt) for name, cnt in db.execute(stmt).all() if name]
+
+
+def get_distinct_bidang(db: Session) -> List[Tuple[str, int]]:
+    stmt = (
+        select(models.Document.bidang, func.count(models.Document.uuid))
+        .group_by(models.Document.bidang)
+        .order_by(func.count(models.Document.uuid).desc())
+    )
+    return [(name, cnt) for name, cnt in db.execute(stmt).all() if name]
+
+
+def get_distinct_sub_bidang(db: Session) -> List[Tuple[str, int]]:
+    # Banyak dokumen tidak punya sub_bidang → wajar hasil 0 jika memang tidak tersedia
+    stmt = (
+        select(models.Document.sub_bidang, func.count(models.Document.uuid))
+        .where(models.Document.sub_bidang.is_not(None))
+        .group_by(models.Document.sub_bidang)
+        .order_by(func.count(models.Document.uuid).desc())
+    )
+    return [(name, cnt) for name, cnt in db.execute(stmt).all() if name]
