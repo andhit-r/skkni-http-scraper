@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import List, Dict
 
 from app.core.db import init_db, get_session
@@ -15,6 +15,10 @@ from app.repositories.skkni_repository import (
 
 
 def read_seed_uuids() -> List[str]:
+    """
+    Baca daftar UUID dari SEED_FILE (satu UUID per baris).
+    Default path: /data/seed_uuids.txt
+    """
     seed_path = os.environ.get("SEED_FILE", "/data/seed_uuids.txt")
     uuids: List[str] = []
     if os.path.exists(seed_path):
@@ -35,24 +39,24 @@ def main() -> None:
 
     for idx, uuid in enumerate(uuids, start=1):
         try:
-            # RAW detail (bukan normalized)
+            # Ambil detail mentah dari API Kemnaker.
             raw_detail = fetch_document_detail(uuid)
 
-            # Normalisasi SEKALI di worker
+            # Normalisasi sekali di worker; listing_url kita kosongkan (tidak wajib).
             doc_row = normalize_document(raw_detail, listing_url="")
 
-            # Guard tambahan: pastikan listing_url string
+            # Guard: pastikan listing_url selalu string
             if not isinstance(doc_row.get("listing_url", ""), str):
                 doc_row["listing_url"] = ""
 
-            # updated_at: objek datetime (bukan string)
-            doc_row["updated_at"] = datetime.utcnow()
+            # updated_at harus timezone-aware datetime (menghindari DeprecationWarning)
+            doc_row["updated_at"] = datetime.now(UTC)
             docs_payload.append(doc_row)
 
-            # Units: sudah dinormalisasi di repository
+            # Ambil & normalisasi units; tambahkan updated_at timezone-aware
             ulist = fetch_units_for_document(uuid)
             for r in ulist:
-                r["updated_at"] = datetime.utcnow()
+                r["updated_at"] = datetime.now(UTC)
             units_payload.extend(ulist)
 
             print(f"[worker] {idx}/{len(uuids)} OK: {uuid} (units: {len(ulist)})")
