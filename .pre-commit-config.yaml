@@ -1,11 +1,11 @@
 repos:
+  # Python formatting + lint
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.3
+    rev: v0.12.9
     hooks:
       - id: ruff-format
         name: ruff-format (code formatter)
         types: [python]
-        # new stage name syntax
         stages: [pre-commit]
       - id: ruff
         name: ruff (lint & import sort)
@@ -13,6 +13,41 @@ repos:
         types: [python]
         stages: [pre-commit]
 
-# Notes:
-# - Avoid blacklisted hooks (lychee, hadolint, markdownlint-cli).
-# - We'll add typing (mypy/pyright) later.
+  # General-purpose lightweight checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: detect-private-key
+      - id: debug-statements
+
+  # YAML lint (pakai repo resmi, bukan mirrors)
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        args: ["-c", ".yamllint"]
+
+  # JSON formatting (2-space indent) — hanya file .json
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        additional_dependencies: ["prettier@3.3.3"]
+        files: '\\.json$'
+        args: ["--config-precedence=prefer-file", "--log-level=warn"]
+
+  # Shell lint (bundled binary)
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        types: [shell]
+        exclude: "^(.venv|data)/"

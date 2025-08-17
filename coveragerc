@@ -1,8 +1,8 @@
 [run]
 branch = True
-source = 
+source =
     app
-omit = 
+omit =
     tests/*
     */.venv/*
     */site-packages/*

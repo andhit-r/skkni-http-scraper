@@ -14,8 +14,8 @@
 
 ## 🌐 Kebijakan Bahasa
 
-- 📝 **Kode & komentar:** ditulis dalam **bahasa Inggris**  
-- 📄 **Dokumentasi & README:** ditulis dalam **bahasa Indonesia**  
+- 📝 **Kode & komentar:** ditulis dalam **bahasa Inggris**
+- 📄 **Dokumentasi & README:** ditulis dalam **bahasa Indonesia**
 - 🎯 **Tujuan:** memudahkan kolaborasi lintas developer (internasional) sekaligus menjaga konteks lokal untuk pengguna
 
 ---
