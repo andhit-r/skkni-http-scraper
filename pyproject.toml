@@ -1,6 +1,17 @@
+[project]
+name = "skkni-api"
+version = "0.0.0"
+description = "HTTP scraper/API untuk SKKNI"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+authors = [{ name = "PT. Simetri Sinergi Indonesia" }]
+
 [tool.black]
 line-length = 88
 target-version = ['py311']
 
 [tool.isort]
 profile = "black"
+
+
+
