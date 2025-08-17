@@ -8,8 +8,15 @@
 [![CI](https://github.com/andhit-r/skkni-http-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/andhit-r/skkni-http-scraper/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/andhit-t/skkni-http-scraper/branch/main/graph/badge.svg)](https://codecov.io/gh/andhit-r/skkni-http-scraper)
 
-
 > **SKKNI HTTP Scraper** adalah layanan HTTP berbasis [FastAPI](https://fastapi.tiangolo.com/) untuk mengambil data **dokumen** dan **unit kompetensi** dari portal resmi SKKNI (Kemnaker), lengkap dengan caching lokal menggunakan SQLite.
+
+---
+
+## 🌐 Kebijakan Bahasa
+
+- 📝 **Kode & komentar:** ditulis dalam **bahasa Inggris**  
+- 📄 **Dokumentasi & README:** ditulis dalam **bahasa Indonesia**  
+- 🎯 **Tujuan:** memudahkan kolaborasi lintas developer (internasional) sekaligus menjaga konteks lokal untuk pengguna
 
 ---
 
