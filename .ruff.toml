@@ -1,0 +1,41 @@
+# Ruff configuration for formatting & imports
+line-length = 120
+target-version = "py312"
+extend-exclude = [
+  ".venv",
+  "data",
+  "skkni_cache.db",
+  "test_unit.db",
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+docstring-code-format = true
+docstring-code-line-length = 120
+
+[lint]
+select = [
+  "E",  # pycodestyle errors
+  "F",  # pyflakes
+  "W",  # pycodestyle warnings
+  "I",  # isort (import sorting)
+  "N",  # pep8-naming
+  "UP", # pyupgrade
+  "B",  # flake8-bugbear
+  "C90" # mccabe complexity
+]
+# Ignore FastAPI Depends default (B008) and long lines (E501) to avoid changing working code.
+ignore = ["D", "ANN", "B008", "E501"]
+fixable = ["ALL"]
+
+[lint.mccabe]
+# Allow higher complexity ceiling without code refactor for now.
+max-complexity = 20
+
+[lint.isort]
+known-first-party = ["app", "skkni_api"]
+split-on-trailing-comma = true
+combine-as-imports = true
+force-sort-within-sections = true

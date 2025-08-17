@@ -2,23 +2,22 @@
 from __future__ import annotations
 
 import os
-from typing import List, Set
 
 from app.core.db import SessionLocal, init_db
 from app.db import crud
 from app.repositories.skkni_repository import (
-    fetch_documents_and_units_by_uuids,
     DEFAULT_SEED_UUIDS,
+    fetch_documents_and_units_by_uuids,
 )
 
 
-def _read_seed_file(path: str) -> List[str]:
+def _read_seed_file(path: str) -> list[str]:
     if not path:
         return []
     if not os.path.exists(path):
         return []
-    uuids: List[str] = []
-    with open(path, "r", encoding="utf-8") as f:
+    uuids: list[str] = []
+    with open(path, encoding="utf-8") as f:
         for line in f:
             s = line.strip()
             if not s or s.startswith("#"):
@@ -27,16 +26,16 @@ def _read_seed_file(path: str) -> List[str]:
     return uuids
 
 
-def _read_seed_env() -> List[str]:
+def _read_seed_env() -> list[str]:
     raw = os.getenv("SEED_UUIDS", "").strip()
     if not raw:
         return []
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 
-def _unique_preserve_order(items: List[str]) -> List[str]:
-    seen: Set[str] = set()
-    out: List[str] = []
+def _unique_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
     for x in items:
         if x not in seen:
             seen.add(x)

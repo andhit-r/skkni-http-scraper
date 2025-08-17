@@ -1,7 +1,7 @@
 import re
-from typing import Dict, List, Tuple
-import httpx
+
 from bs4 import BeautifulSoup
+import httpx
 
 from app.core.config import settings
 
@@ -17,13 +17,13 @@ def _extract_uuid(href: str) -> str | None:
     return m.group(1) if m else None
 
 
-def scrape_document_listing(page_from: int, page_to: int, limit: int) -> List[Dict]:
+def scrape_document_listing(page_from: int, page_to: int, limit: int) -> list[dict]:
     """
     Scrape halaman listing dokumen SKKNI.
     Hasil mentah: hanya judul & unduh_url + uuid + listing_url.
     Detail (sektor/bidang/tahun/nomor) akan diisi di langkah enrich.
     """
-    items: List[Dict] = []
+    items: list[dict] = []
     with httpx.Client(timeout=30.0) as client:
         for page in range(page_from, page_to + 1):
             url = f"{LIST_URL}?limit={limit}&page={page}"
@@ -69,15 +69,15 @@ def scrape_document_listing(page_from: int, page_to: int, limit: int) -> List[Di
     return deduped
 
 
-def enrich_documents_from_api(docs: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
+def enrich_documents_from_api(docs: list[dict]) -> tuple[list[dict], list[dict]]:
     """
     Enrich setiap dokumen via API publik: /v1/public/documents/{uuid}
     Menghasilkan:
       - daftar dokumen lengkap (dengan sektor/bidang/tahun/nomor_kepmen)
       - daftar unit yang ditarik dari 'units' pada response API
     """
-    full_docs: List[Dict] = []
-    units: List[Dict] = []
+    full_docs: list[dict] = []
+    units: list[dict] = []
 
     with httpx.Client(timeout=30.0) as client:
         for d in docs:
@@ -97,7 +97,7 @@ def enrich_documents_from_api(docs: List[Dict]) -> Tuple[List[Dict], List[Dict]]
             sub_bidang = None
 
             core = js.get("core_category") or {}
-            cat = (core.get("category") or {})
+            cat = core.get("category") or {}
             if cat.get("name"):
                 sektor = cat["name"]
             if core.get("name"):
@@ -148,14 +148,16 @@ def enrich_documents_from_api(docs: List[Dict]) -> Tuple[List[Dict], List[Dict]]
                         "tahun": tahun,
                         "nomor_kepmen": nomor_kepmen,
                         "unduh_url": d.get("unduh_url"),
-                        "listing_url": d.get("listing_url").replace("/dokumen", "/dokumen-unit") if d.get("listing_url") else None,
+                        "listing_url": d.get("listing_url").replace("/dokumen", "/dokumen-unit")
+                        if d.get("listing_url")
+                        else None,
                     }
                 )
 
     return full_docs, units
 
 
-def scrape_documents_and_units(page_from: int, page_to: int, limit: int) -> Tuple[List[Dict], List[Dict]]:
+def scrape_documents_and_units(page_from: int, page_to: int, limit: int) -> tuple[list[dict], list[dict]]:
     """
     Kombinasi: scrape listing -> enrich ke API -> return (docs, units)
     """

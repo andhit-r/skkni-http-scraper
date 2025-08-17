@@ -1,5 +1,5 @@
 import os
-import asyncio
+
 import pytest
 
 # Set env before imports so Settings picks them up
@@ -10,9 +10,11 @@ os.environ.setdefault("MAX_CONCURRENCY", "2")
 
 from fastapi.testclient import TestClient
 
+from app.core.db import Base, SessionLocal, engine
+
 # Import after env is set
 from app.main import app
-from app.core.db import Base, engine, SessionLocal
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_db():
@@ -22,9 +24,11 @@ def setup_db():
     yield
     Base.metadata.drop_all(bind=engine)
 
+
 @pytest.fixture(scope="session")
 def client():
     return TestClient(app)
+
 
 @pytest.fixture()
 def db():
@@ -33,6 +37,7 @@ def db():
         yield db
     finally:
         db.close()
+
 
 @pytest.fixture()
 def mock_repo(monkeypatch):

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import Iterable, List, Optional, Tuple
 
-from sqlalchemy import func, select, or_, and_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import models
@@ -12,11 +12,11 @@ from app.db import models
 CACHE_TTL_DAYS = 30
 
 
-def is_expired(ts: Optional[datetime]) -> bool:
+def is_expired(ts: datetime | None) -> bool:
     return (not ts) or ((datetime.utcnow() - ts) > timedelta(days=CACHE_TTL_DAYS))
 
 
-def _coerce_dt(val) -> Optional[datetime]:
+def _coerce_dt(val) -> datetime | None:
     """
     Terima datetime/str/None → kembalikan datetime (atau None).
     - String yang didukung:
@@ -45,6 +45,7 @@ def _coerce_dt(val) -> Optional[datetime]:
 # --------------------------
 # Documents
 # --------------------------
+
 
 def upsert_documents(db: Session, docs: Iterable[dict]) -> None:
     """
@@ -89,11 +90,11 @@ def upsert_documents(db: Session, docs: Iterable[dict]) -> None:
 def get_documents(
     db: Session,
     limit: int = 20,
-    q: Optional[str] = None,
-    sektor: Optional[str] = None,
-    bidang: Optional[str] = None,
-    tahun: Optional[str] = None,
-) -> Tuple[int, List[dict]]:
+    q: str | None = None,
+    sektor: str | None = None,
+    bidang: str | None = None,
+    tahun: str | None = None,
+) -> tuple[int, list[dict]]:
     """
     Ambil dokumen dari DB dengan optional filter.
     """
@@ -143,6 +144,7 @@ def get_documents(
 # Units
 # --------------------------
 
+
 def upsert_units(db: Session, units: Iterable[dict]) -> None:
     """
     Upsert daftar unit ke tabel units.
@@ -152,11 +154,7 @@ def upsert_units(db: Session, units: Iterable[dict]) -> None:
     for u in units:
         key = (u["doc_uuid"], u["kode_unit"])
         obj: models.Unit | None = (
-            db.execute(
-                select(models.Unit).where(
-                    and_(models.Unit.doc_uuid == key[0], models.Unit.kode_unit == key[1])
-                )
-            )
+            db.execute(select(models.Unit).where(and_(models.Unit.doc_uuid == key[0], models.Unit.kode_unit == key[1])))
             .scalars()
             .first()
         )
@@ -189,12 +187,12 @@ def upsert_units(db: Session, units: Iterable[dict]) -> None:
 def get_units(
     db: Session,
     limit: int = 50,
-    q: Optional[str] = None,
-    sektor: Optional[str] = None,
-    bidang: Optional[str] = None,
-    tahun: Optional[str] = None,
-    doc_uuid: Optional[str] = None,
-) -> Tuple[int, List[dict]]:
+    q: str | None = None,
+    sektor: str | None = None,
+    bidang: str | None = None,
+    tahun: str | None = None,
+    doc_uuid: str | None = None,
+) -> tuple[int, list[dict]]:
     """
     Ambil units dari DB. Jika tanpa filter sekalipun, harus tetap return data (dibatasi 'limit').
     """
@@ -241,7 +239,8 @@ def get_units(
 # Taxonomy (distinct)
 # --------------------------
 
-def get_distinct_sectors(db: Session) -> List[Tuple[str, int]]:
+
+def get_distinct_sectors(db: Session) -> list[tuple[str, int]]:
     stmt = (
         select(models.Document.sektor, func.count(models.Document.uuid))
         .group_by(models.Document.sektor)
@@ -250,7 +249,7 @@ def get_distinct_sectors(db: Session) -> List[Tuple[str, int]]:
     return [(name, cnt) for name, cnt in db.execute(stmt).all() if name]
 
 
-def get_distinct_bidang(db: Session) -> List[Tuple[str, int]]:
+def get_distinct_bidang(db: Session) -> list[tuple[str, int]]:
     stmt = (
         select(models.Document.bidang, func.count(models.Document.uuid))
         .group_by(models.Document.bidang)
@@ -259,7 +258,7 @@ def get_distinct_bidang(db: Session) -> List[Tuple[str, int]]:
     return [(name, cnt) for name, cnt in db.execute(stmt).all() if name]
 
 
-def get_distinct_sub_bidang(db: Session) -> List[Tuple[str, int]]:
+def get_distinct_sub_bidang(db: Session) -> list[tuple[str, int]]:
     # Banyak dokumen tidak punya sub_bidang → wajar hasil 0 jika memang tidak tersedia
     stmt = (
         select(models.Document.sub_bidang, func.count(models.Document.uuid))

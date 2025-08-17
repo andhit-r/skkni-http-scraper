@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
-from playwright.async_api import async_playwright
-from app.core.config import settings
 import os
+
+from playwright.async_api import async_playwright
+
+from app.core.config import settings
+
 
 def _candidate_executables() -> list[str]:
     # Urutan kandidat path chromium di Debian/Ubuntu
@@ -13,6 +16,7 @@ def _candidate_executables() -> list[str]:
     cands += ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/snap/bin/chromium"]
     # filter yang eksis
     return [p for p in cands if os.path.exists(p)]
+
 
 @asynccontextmanager
 async def chromium_page():

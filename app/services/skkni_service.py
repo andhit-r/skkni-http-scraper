@@ -1,18 +1,18 @@
-from typing import List, Dict
-from app.models.skkni import SearchParams, UnitCompetency, DocumentMetadata
+from app.models.skkni import DocumentMetadata, SearchParams, UnitCompetency
 from app.repositories.skkni_repository import SkkniRepository
 from app.utils.parsing import (
-    build_join_key_nomor,
     build_join_key_judul,
+    build_join_key_nomor,
     make_unit_id,
     pdf_doc_key,
 )
+
 
 class SkkniService:
     def __init__(self):
         self.repo = SkkniRepository()
 
-    async def search_units(self, params: SearchParams) -> List[UnitCompetency]:
+    async def search_units(self, params: SearchParams) -> list[UnitCompetency]:
         # 1) ambil unit sesuai paging/filter dasar
         units = await self.repo.fetch_units(
             q=params.q,
@@ -26,7 +26,7 @@ class SkkniService:
 
         # siapkan id walau tanpa merge
         for u in units:
-            u["id"] = make_unit_id(u.get("kode_unit",""), u.get("judul_unit",""), u.get("nomor_skkni",""))
+            u["id"] = make_unit_id(u.get("kode_unit", ""), u.get("judul_unit", ""), u.get("nomor_skkni", ""))
 
         if not params.include_merged:
             return [UnitCompetency(**u) for u in units]
@@ -47,7 +47,7 @@ class SkkniService:
             if jj and jj not in idx_judul:
                 idx_judul[jj] = d
 
-        merged: List[Dict] = []
+        merged: list[dict] = []
         for u in units:
             row = dict(u)
 
@@ -71,21 +71,21 @@ class SkkniService:
             merged.append(row)
 
         # 4) filter lanjutan (sektor/bidang/sub_bidang/tahun)
-        def ok(x: Dict) -> bool:
-            if params.sektor and params.sektor.lower() not in (x.get("sektor","").lower()):
+        def ok(x: dict) -> bool:
+            if params.sektor and params.sektor.lower() not in (x.get("sektor", "").lower()):
                 return False
-            if params.bidang and params.bidang.lower() not in (x.get("bidang","").lower()):
+            if params.bidang and params.bidang.lower() not in (x.get("bidang", "").lower()):
                 return False
-            if params.sub_bidang and params.sub_bidang.lower() not in (x.get("sub_bidang","").lower()):
+            if params.sub_bidang and params.sub_bidang.lower() not in (x.get("sub_bidang", "").lower()):
                 return False
-            if params.tahun and params.tahun.lower() not in (x.get("tahun","").lower()):
+            if params.tahun and params.tahun.lower() not in (x.get("tahun", "").lower()):
                 return False
             return True
 
         merged = [m for m in merged if ok(m)]
         return [UnitCompetency(**m) for m in merged]
 
-    async def search_documents(self, params: SearchParams) -> List[DocumentMetadata]:
+    async def search_documents(self, params: SearchParams) -> list[DocumentMetadata]:
         docs = await self.repo.fetch_documents(
             q=params.q,
             page_from=params.page_from,

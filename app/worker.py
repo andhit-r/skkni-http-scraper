@@ -1,11 +1,10 @@
 # app/worker.py
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import os
-from datetime import datetime, UTC
-from typing import List, Dict
 
-from app.core.db import init_db, get_session
+from app.core.db import get_session, init_db
 from app.db import crud
 from app.repositories.skkni_repository import (
     fetch_document_detail,
@@ -14,15 +13,15 @@ from app.repositories.skkni_repository import (
 )
 
 
-def read_seed_uuids() -> List[str]:
+def read_seed_uuids() -> list[str]:
     """
     Baca daftar UUID dari SEED_FILE (satu UUID per baris).
     Default path: /data/seed_uuids.txt
     """
     seed_path = os.environ.get("SEED_FILE", "/data/seed_uuids.txt")
-    uuids: List[str] = []
+    uuids: list[str] = []
     if os.path.exists(seed_path):
-        with open(seed_path, "r", encoding="utf-8") as f:
+        with open(seed_path, encoding="utf-8") as f:
             for line in f:
                 s = line.strip()
                 if s:
@@ -34,8 +33,8 @@ def main() -> None:
     uuids = read_seed_uuids()
     print(f"[worker] total UUID yang akan diproses: {len(uuids)}")
 
-    docs_payload: List[Dict] = []
-    units_payload: List[Dict] = []
+    docs_payload: list[dict] = []
+    units_payload: list[dict] = []
 
     for idx, uuid in enumerate(uuids, start=1):
         try:

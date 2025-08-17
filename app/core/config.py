@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,7 +26,7 @@ class Settings(BaseSettings):
     MAX_CONCURRENCY: int = 2
 
     # ---- helper ----
-    def allowed_origins_list(self) -> List[str]:
+    def allowed_origins_list(self) -> list[str]:
         s = (self.ALLOWED_ORIGINS or "").strip()
         if not s or s == "*":
             return ["*"]

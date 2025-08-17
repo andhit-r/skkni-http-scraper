@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime, Text, UniqueConstraint, ForeignKey
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()

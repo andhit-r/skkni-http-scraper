@@ -2,10 +2,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.routes import api_router
 from app.core.config import settings
 from app.core.db import init_db
-from app.api.v1.routes import api_router
-
 
 app = FastAPI(title="SKKNI Scraper API", version="1.0.0")
 

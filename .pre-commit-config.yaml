@@ -1,0 +1,18 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.3
+    hooks:
+      - id: ruff-format
+        name: ruff-format (code formatter)
+        types: [python]
+        # new stage name syntax
+        stages: [pre-commit]
+      - id: ruff
+        name: ruff (lint & import sort)
+        args: [--fix]
+        types: [python]
+        stages: [pre-commit]
+
+# Notes:
+# - Avoid blacklisted hooks (lychee, hadolint, markdownlint-cli).
+# - We'll add typing (mypy/pyright) later.

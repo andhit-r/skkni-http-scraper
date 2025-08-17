@@ -1,7 +1,9 @@
 """Parsing helpers & normalizers."""
+
 import re
 
 # --- String cleaners (untuk tampilan) ---
+
 
 def norm(s: str) -> str:
     """
@@ -10,15 +12,28 @@ def norm(s: str) -> str:
     """
     return re.sub(r"\s+", " ", (s or "").strip())
 
+
 def slug(s: str) -> str:
     """Slug alfanumerik lowercase (untuk ID)."""
     return re.sub(r"[^a-z0-9]+", "_", (s or "").lower()).strip("_")
 
+
 # --- Join-key builders (selalu normalized lowercase) ---
 
 STOPWORDS_NOMOR = (
-    "skkni", "nomor", "no", "no.", "thn", "tahun", "kepmen",
-    "keputusan", "menteri", "tenaga", "kerja", "kemnaker", "kementerian"
+    "skkni",
+    "nomor",
+    "no",
+    "no.",
+    "thn",
+    "tahun",
+    "kepmen",
+    "keputusan",
+    "menteri",
+    "tenaga",
+    "kerja",
+    "kemnaker",
+    "kementerian",
 )
 
 PHRASES_JUDUL = (
@@ -26,6 +41,7 @@ PHRASES_JUDUL = (
     "standar kompetensi kerja",
     "skkni",
 )
+
 
 def build_join_key_nomor(nomor: str) -> str:
     """
@@ -40,6 +56,7 @@ def build_join_key_nomor(nomor: str) -> str:
     s = re.sub(r"[^\w]+", "", s)
     return s
 
+
 def build_join_key_judul(judul: str) -> str:
     """
     Normalisasi judul SKKNI untuk join (buang frasa umum dan non-alnum).
@@ -49,6 +66,7 @@ def build_join_key_judul(judul: str) -> str:
         s = s.replace(p, "")
     s = re.sub(r"[^\w]+", "", s)
     return s
+
 
 def pdf_doc_key(url: str) -> str:
     """
@@ -64,21 +82,24 @@ def pdf_doc_key(url: str) -> str:
     # fallback: pakai keseluruhan path huruf/angka saja
     return re.sub(r"[^a-z0-9]+", "", u.lower())
 
+
 # --- Status cleaner & deterministic ID ---
 
 STATUS_TOKENS = ("BERLAKU", "DICABUT", "DIUBAH", "TIDAK BERLAKU")
+
 
 def strip_status_tokens(s: str) -> str:
     """
     Hilangkan embel-embel status di ujung/mid string seperti ' BERLAKU' dsb.
     Case-insensitive dan tetap mempertahankan case asli selain tokennya.
     """
-    t = (s or "")
+    t = s or ""
     for tok in STATUS_TOKENS:
         # hilangkan varian " XXX" dan "-XXX"
         t = t.replace(f" {tok}", "").replace(f"-{tok}", "")
-        t = re.sub(fr"\b{tok}\b", "", t, flags=re.IGNORECASE)
+        t = re.sub(rf"\b{tok}\b", "", t, flags=re.IGNORECASE)
     return norm(t)
+
 
 def make_unit_id(kode_unit: str = "", judul_unit: str = "", nomor_skkni: str = "") -> str:
     """
