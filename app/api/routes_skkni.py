@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import get_skkni_service
-from app.models.skkni import DocumentsResponse, SearchParams, UnitsResponse
+from app.models.skkni import DocumentsResponse, SearchParams, UnitsResponse  # type: ignore[attr-defined]
 from app.services.skkni_service import SkkniService
 
 router = APIRouter()

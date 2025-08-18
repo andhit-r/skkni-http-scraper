@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import Mapped, declarative_base, relationship
+
+if TYPE_CHECKING:
+    pass  # optional
+
 
 Base = declarative_base()
 
@@ -34,7 +39,7 @@ class Document(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # relasi ke units
-    units = relationship("Unit", back_populates="document", cascade="all, delete-orphan")
+    units: Mapped[list[Unit]] = relationship("Unit", back_populates="document", cascade="all, delete-orphan")
 
 
 class Unit(Base):
@@ -56,8 +61,7 @@ class Unit(Base):
 
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    document = relationship("Document", back_populates="units")
-
+    document: Mapped[Document] = relationship("Document", back_populates="units")
     __table_args__ = (
         # Tiap dokumen bisa punya kode unit unik
         UniqueConstraint("doc_uuid", "kode_unit", name="uq_doc_unit_code"),

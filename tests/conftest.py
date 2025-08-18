@@ -10,7 +10,7 @@ os.environ.setdefault("MAX_CONCURRENCY", "2")
 
 from fastapi.testclient import TestClient
 
-from app.core.db import Base, SessionLocal, engine
+from app.core.db import Base, SessionLocal, engine  # type: ignore[attr-defined]
 
 # Import after env is set
 from app.main import app

@@ -5,7 +5,7 @@ import os
 
 from app.core.db import SessionLocal, init_db
 from app.db import crud
-from app.repositories.skkni_repository import (
+from app.repositories.skkni_repository import (  # type: ignore[attr-defined]
     DEFAULT_SEED_UUIDS,
     fetch_documents_and_units_by_uuids,
 )

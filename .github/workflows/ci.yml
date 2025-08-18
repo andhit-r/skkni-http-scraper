@@ -41,6 +41,11 @@ jobs:
       - name: Ruff lint
         run: ruff check .
 
+      - name: Type check (mypy)
+        run: |
+          pip install mypy types-setuptools types-requests types-python-dateutil
+          mypy .
+
       - name: Run tests with coverage
         env:
           DATABASE_URL: "sqlite:///./test_unit.db"

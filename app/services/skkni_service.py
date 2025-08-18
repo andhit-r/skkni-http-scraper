@@ -1,5 +1,5 @@
-from app.models.skkni import DocumentMetadata, SearchParams, UnitCompetency
-from app.repositories.skkni_repository import SkkniRepository
+from app.models.skkni import DocumentMetadata, SearchParams, UnitCompetency  # type: ignore[attr-defined]
+from app.repositories.skkni_repository import SkkniRepository  # type: ignore[attr-defined]
 from app.utils.parsing import (
     build_join_key_judul,
     build_join_key_nomor,

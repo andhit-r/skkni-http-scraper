@@ -1,4 +1,5 @@
 import re
+from typing import cast
 
 from bs4 import BeautifulSoup
 import httpx
@@ -148,7 +149,7 @@ def enrich_documents_from_api(docs: list[dict]) -> tuple[list[dict], list[dict]]
                         "tahun": tahun,
                         "nomor_kepmen": nomor_kepmen,
                         "unduh_url": d.get("unduh_url"),
-                        "listing_url": d.get("listing_url").replace("/dokumen", "/dokumen-unit")
+                        "listing_url": cast(str, d.get("listing_url")).replace("/dokumen", "/dokumen-unit")
                         if d.get("listing_url")
                         else None,
                     }
